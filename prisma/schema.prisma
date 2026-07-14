@@ -1,0 +1,130 @@
+// このファイルは docs/schema.sql と手動で同期します。
+// `prisma migrate` は一切使用しません(DBへのDDL適用は docs/schema.sql を手動実行することで行います)。
+// スキーマを変更する場合は、まず docs/schema.sql を更新し、その内容をこのファイルに反映してください。
+// `npx prisma generate` は DB 接続なしで型/Client を生成するだけなので、変更後の整合性確認に使えます。
+//
+// 注意: 以下の @relation 定義は Prisma Client の型付きクエリ(include等)のために存在するだけで、
+// DB に外部キー制約(FK)を作るものではありません(migrate/db push を実行しないため実DBには反映されません)。
+// docs/schema.sql も意図的にFK制約なしで管理しています。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 以降、接続文字列は datasource block の url ではなく、
+// PrismaClient に渡す Driver Adapter(src/db/prismaClient.ts)側で指定する。
+datasource db {
+  provider = "mysql"
+}
+
+// 代理店(エージェンシー)。全てのビジネス(location)はいずれかの代理店に紐づく。
+model Agency {
+  id               Int      @id @default(autoincrement())
+  name             String   @db.VarChar(255)
+  googleAccountId  String?  @db.VarChar(255)
+  createdAt        DateTime @default(now()) @db.DateTime(3)
+  updatedAt        DateTime @updatedAt @db.DateTime(3)
+
+  locations Location[]
+
+  @@map("agencies")
+}
+
+// Google Business Profile 上の1ビジネス(店舗)拠点。
+model Location {
+  id               Int      @id @default(autoincrement())
+  agencyId         Int
+  googleLocationId String   @db.VarChar(255)
+  name             String   @db.VarChar(255)
+  createdAt        DateTime @default(now()) @db.DateTime(3)
+  updatedAt        DateTime @updatedAt @db.DateTime(3)
+
+  agency               Agency                    @relation(fields: [agencyId], references: [id])
+  dailyMetrics         DailyMetric[]
+  dailyMetricsPast     DailyMetricPast[]
+  metricDayStatuses    LocationMetricDayStatus[]
+
+  @@unique([agencyId, googleLocationId], name: "locations_agencyId_googleLocationId_key")
+  @@map("locations")
+}
+
+// GBP Performance API から取得した日次メトリクスの実測値。
+enum MetricType {
+  BUSINESS_IMPRESSIONS_DESKTOP_MAPS
+  BUSINESS_IMPRESSIONS_DESKTOP_SEARCH
+  BUSINESS_IMPRESSIONS_MOBILE_MAPS
+  BUSINESS_IMPRESSIONS_MOBILE_SEARCH
+  CALL_CLICKS
+  BUSINESS_BOOKINGS
+  BUSINESS_DIRECTION_REQUESTS
+  WEBSITE_CLICKS
+}
+
+model DailyMetric {
+  id         BigInt     @id @default(autoincrement())
+  locationId Int
+  metricDate DateTime   @db.Date
+  metricType MetricType
+  value      Int
+  createdAt  DateTime   @default(now()) @db.DateTime(3)
+  updatedAt  DateTime   @updatedAt @db.DateTime(3)
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, metricDate, metricType], name: "daily_metrics_locationId_metricDate_metricType_key")
+  @@index([metricDate], name: "daily_metrics_metricDate_idx")
+  @@map("daily_metrics")
+}
+
+// Google OAuth のリフレッシュトークン等の認証情報。
+// 実際の値は Claude が扱わない(手動での oauth:bootstrap 実行 → 手動INSERTを想定)。
+model GoogleOauthCredential {
+  id           Int       @id @default(autoincrement())
+  accountLabel String    @unique @db.VarChar(255)
+  refreshToken String    @db.Text
+  scope        String    @db.VarChar(255)
+  expiresAt    DateTime? @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @db.DateTime(3)
+
+  @@map("google_oauth_credentials")
+}
+
+// 将来のバッチジョブ(3日後取得・0件フラグ・再試行)で使うステータス管理テーブル。
+// 今回のスコープのコードでは未使用だが、スキーマ整合のため定義しておく。
+enum DayStatus {
+  PENDING
+  AVAILABLE
+}
+
+model LocationMetricDayStatus {
+  id         Int       @id @default(autoincrement())
+  locationId Int
+  metricDate DateTime  @db.Date
+  status     DayStatus @default(PENDING)
+  createdAt  DateTime  @default(now()) @db.DateTime(3)
+  updatedAt  DateTime  @updatedAt @db.DateTime(3)
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, metricDate], name: "location_metric_day_status_locationId_metricDate_key")
+  @@map("location_metric_day_status")
+}
+
+// 再取得による補正等のための過去値保持テーブル(daily_metrics と同形)。
+// 用途の詳細は将来のバッチ照合ロジック設計時に確定する(未使用)。
+model DailyMetricPast {
+  id         BigInt     @id @default(autoincrement())
+  locationId Int
+  metricDate DateTime   @db.Date
+  metricType MetricType
+  value      Int
+  createdAt  DateTime   @default(now()) @db.DateTime(3)
+  updatedAt  DateTime   @updatedAt @db.DateTime(3)
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, metricDate, metricType], name: "daily_metrics_past_locationId_metricDate_metricType_key")
+  @@index([metricDate], name: "daily_metrics_past_metricDate_idx")
+  @@map("daily_metrics_past")
+}
