@@ -6,12 +6,23 @@
 
 ## 1. Cloud SQL (MySQL) の準備
 
-1. GCP Console から Cloud SQL for MySQL のインスタンスを作成する。
+1. GCP Console から Cloud SQL for MySQL のインスタンスを作成する(認証方式は「組み込み認証」でよい)。
 2. インスタンス内にデータベース(例: `gbp_performance`)を作成する。
-3. 接続用のユーザー・パスワードを発行する。
-4. `docs/schema.sql` の内容を、そのDBに対して手動で実行する(MySQLクライアント、Cloud SQL Studio など任意の方法)。
+3. Cloud SQL Studio(GCP Console内のブラウザSQLエディタ)に `root` ユーザー・インスタンス作成時のパスワードでログインする。
+4. `root` でログインした状態で、アプリ専用のDBユーザーを作成する(`root` は初期セットアップ専用とし、アプリの日常的な接続には使わない):
+   ```sql
+   CREATE USER 'gbp_app'@'%' IDENTIFIED BY '強力なパスワードをここに';
+   GRANT SELECT, INSERT, UPDATE, DELETE ON gbp_performance.* TO 'gbp_app'@'%';
+   FLUSH PRIVILEGES;
+   ```
+   - パスワードは自分で生成し、Secret Managerと `.env` にのみ登録する(Claudeには共有しない)。
+5. `docs/schema.sql` の内容を、そのDBに対して手動で実行する(`root` のままで可)。
    - このファイルが今後もスキーマ変更のたびに更新される「正」のDDLです。
    - `prisma migrate` は使いません。スキーマ変更は必ずこのファイルを人間が確認した上で手動実行してください。
+6. できあがった `gbp_app` ユーザーの接続情報を `DATABASE_URL` として使う:
+   ```
+   mysql://gbp_app:<パスワード>@<接続先ホスト>:3306/gbp_performance
+   ```
 
 ## 2. Secret Manager に登録するシークレット
 
@@ -53,5 +64,4 @@ GCP Console の「APIとサービス」→「ライブラリ」から **Business
 
 ## 未確定・将来の課題
 
-- `daily_metrics_past` テーブルの正確な用途(補正前値の保持か、全履歴保持か)は未確定です。将来、0件フラグ→3日再試行のバッチ照合ロジックを設計する際に確定します。
 - Cloud Scheduler 等による定期実行の設計は、このドキュメントの対象外です。別途相談の上、進め方を決めます。

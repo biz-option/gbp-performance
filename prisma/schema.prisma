@@ -41,7 +41,6 @@ model Location {
 
   agency               Agency                    @relation(fields: [agencyId], references: [id])
   dailyMetrics         DailyMetric[]
-  dailyMetricsPast     DailyMetricPast[]
   metricDayStatuses    LocationMetricDayStatus[]
 
   @@unique([agencyId, googleLocationId], name: "locations_agencyId_googleLocationId_key")
@@ -109,22 +108,4 @@ model LocationMetricDayStatus {
 
   @@unique([locationId, metricDate], name: "location_metric_day_status_locationId_metricDate_key")
   @@map("location_metric_day_status")
-}
-
-// 再取得による補正等のための過去値保持テーブル(daily_metrics と同形)。
-// 用途の詳細は将来のバッチ照合ロジック設計時に確定する(未使用)。
-model DailyMetricPast {
-  id         BigInt     @id @default(autoincrement())
-  locationId Int
-  metricDate DateTime   @db.Date
-  metricType MetricType
-  value      Int
-  createdAt  DateTime   @default(now()) @db.DateTime(3)
-  updatedAt  DateTime   @updatedAt @db.DateTime(3)
-
-  location Location @relation(fields: [locationId], references: [id])
-
-  @@unique([locationId, metricDate, metricType], name: "daily_metrics_past_locationId_metricDate_metricType_key")
-  @@index([metricDate], name: "daily_metrics_past_metricDate_idx")
-  @@map("daily_metrics_past")
 }

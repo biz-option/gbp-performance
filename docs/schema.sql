@@ -72,20 +72,3 @@ CREATE TABLE `location_metric_day_status` (
     UNIQUE INDEX `location_metric_day_status_locationId_metricDate_key`(`locationId`, `metricDate`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- 再取得による補正等のための過去値保持テーブル(daily_metrics と同形)。
--- 用途の詳細(補正前値の保持なのか、全履歴の別テーブル保持なのか)は
--- 将来のバッチ照合ロジック設計時に確定する。現時点のコードでは未使用。
-CREATE TABLE `daily_metrics_past` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `locationId` INTEGER NOT NULL,
-    `metricDate` DATE NOT NULL,
-    `metricType` ENUM('BUSINESS_IMPRESSIONS_DESKTOP_MAPS', 'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH', 'BUSINESS_IMPRESSIONS_MOBILE_MAPS', 'BUSINESS_IMPRESSIONS_MOBILE_SEARCH', 'CALL_CLICKS', 'BUSINESS_BOOKINGS', 'BUSINESS_DIRECTION_REQUESTS', 'WEBSITE_CLICKS') NOT NULL,
-    `value` INTEGER NOT NULL,
-    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updatedAt` DATETIME(3) NOT NULL,
-
-    INDEX `daily_metrics_past_metricDate_idx`(`metricDate`),
-    UNIQUE INDEX `daily_metrics_past_locationId_metricDate_metricType_key`(`locationId`, `metricDate`, `metricType`),
-    PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
