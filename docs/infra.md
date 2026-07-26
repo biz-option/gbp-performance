@@ -58,11 +58,48 @@ GCP Console の「APIとサービス」→「ライブラリ」から **Business
 1. リポジトリルートに `.env` を作成し、`.env.example` を参考に値を入れる(Cloud SQLがローカルから接続可能である必要があります)。
 2. `npm install`
 3. `npm run oauth:bootstrap` を実行し、表示されるURLをブラウザで開いて認可 → 表示された `code` を入力する。
-4. 画面に表示されたリフレッシュトークンを、`google_oauth_credentials` テーブルへ手動で `INSERT` する(`accountLabel` には任意の識別名、例: `agency-a` を使う)。
-5. `locations` テーブルに、動作確認したいビジネスの行を手動で `INSERT` する(`agencyId` は `agencies` テーブルに作成した代理店のID)。
-6. `npm run fetch:one-day -- --location=<googleLocationId> --date=YYYY-MM-DD --account=<accountLabel>` を実行する。
-7. `daily_metrics` テーブルに行が保存されていることを確認する。
+4. 画面に表示されたリフレッシュトークンを、`google_oauth_credentials` テーブルへ手動で `INSERT` する(`accountLabel` には任意の識別名を使う。このプロジェクトは単一Googleアカウントのみを前提としているため、この行は常に1件だけになる)。
+5. `agencies` テーブルに代理店の行を作成する。各代理店は、対象ロケーションの権限を手順4のGoogleアカウントに共有してもらう運用を前提としている(代理店ごとに別のGoogleアカウント・credentialは扱わない)。
+6. `locations` テーブルに、動作確認したいビジネスの行を手動で `INSERT` する(`agencyId` は手順5で作成した代理店のID)。
+7. `npm run fetch:one-day -- --location=<googleLocationId> --date=YYYY-MM-DD --account=<accountLabel>` を実行する(1ロケーション・1日分の動作確認用)。
+8. `daily_metrics` テーブルに行が保存されていることを確認する。
+9. 複数ロケーションをまとめて確認したい場合は `npm run fetch:daily-batch` を実行する(全locationを巡回し、実行日の5日前までの未取得日をキャッチアップして取得する。使用するGoogleアカウントは `google_oauth_credentials` に登録された唯一の行から自動解決される。詳細は7章)。
+
+## 7. 定期実行(Cloud Scheduler + Cloud Run Jobs)
+
+`fetch-daily-batch` はHTTPサーバーを持たない実行完了型のバッチなので、Cloud Run **Job**(Serviceではない)としてデプロイし、Cloud Scheduler からその実行をキックする構成を想定しています。実際のリソース作成は本ドキュメントの他の章と同様、人間が手動で行ってください。
+
+1. **コンテナイメージのビルド・push**(リポジトリルートの `Dockerfile` を使用)
+   ```text
+   gcloud artifacts repositories create gbp-performance --repository-format=docker --location=<region>
+   docker build -t <region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest .
+   docker push <region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest
+   ```
+2. **Cloud Run Job の作成**(環境変数の注入方法は2章のSecret Managerと同じ `--set-secrets` を使う)
+   ```text
+   gcloud run jobs create fetch-daily-batch \
+     --image=<region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest \
+     --region=<region> \
+     --set-secrets="DATABASE_URL=gbp-performance-database-url:latest,\
+GOOGLE_OAUTH_CLIENT_ID=gbp-performance-oauth-client-id:latest,\
+GOOGLE_OAUTH_CLIENT_SECRET=gbp-performance-oauth-client-secret:latest,\
+GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest"
+   ```
+3. **Cloud Scheduler からJobを起動するためのサービスアカウント**を作成し、そのJobに対して `roles/run.invoker` を付与する。
+4. **Cloud Scheduler ジョブの作成**。ターゲットはHTTP、Cloud Run Admin API の `jobs.run` エンドポイントを叩き、認証は手順3のサービスアカウントによるOIDCトークンを使う。
+   ```text
+   gcloud scheduler jobs create http fetch-daily-batch-trigger \
+     --location=<region> \
+     --schedule="0 18 * * *" \
+     --time-zone="Asia/Tokyo" \
+     --uri="https://run.googleapis.com/v2/projects/<project>/locations/<region>/jobs/fetch-daily-batch:run" \
+     --http-method=POST \
+     --oauth-service-account-email=<scheduler用サービスアカウント>
+   ```
+   スケジュール(`--schedule`)は例です。データ取得対象日は実行日の5日前で固定計算されるため、1日1回実行すれば十分です。
+5. Cloud Run Job の実行ログ(成功/失敗件数、スキップしたlocation)は標準出力に出るため、Cloud Logging で確認できます。
 
 ## 未確定・将来の課題
 
-- Cloud Scheduler 等による定期実行の設計は、このドキュメントの対象外です。別途相談の上、進め方を決めます。
+- 上記の Cloud Scheduler / Cloud Run Job 設定は手順としてドキュメント化したのみで、実際の作成(gcloudコマンドの実行)はまだ行われていません。
+- `fetch-daily-batch` は「単一Googleアカウントのみを前提とする」設計です(`google_oauth_credentials` に2件以上登録されているとエラーで停止する)。将来、代理店ごとに別のGoogleアカウントを使う運用に変わった場合は設計の見直しが必要です。

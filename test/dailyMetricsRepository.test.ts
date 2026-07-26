@@ -11,7 +11,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { MetricType } from "@prisma/client";
-import { upsertDailyMetric } from "../src/db/dailyMetricsRepository.js";
+import { getLastMetricDate, upsertDailyMetric } from "../src/db/dailyMetricsRepository.js";
 
 function createMockClient() {
   return {
@@ -69,5 +69,35 @@ describe("upsertDailyMetric", () => {
     const call = client.dailyMetric.upsert.mock.calls[0]![0];
     expect(call.create.value).toBe(99);
     expect(call.update.value).toBe(99);
+  });
+});
+
+describe("getLastMetricDate", () => {
+  it("locationId で絞り込んだ metricDate の最大値を返す", async () => {
+    const client = {
+      dailyMetric: {
+        aggregate: vi.fn().mockResolvedValue({ _max: { metricDate: new Date("2026-07-15") } }),
+      },
+    };
+
+    const result = await getLastMetricDate(client as never, 42);
+
+    expect(client.dailyMetric.aggregate).toHaveBeenCalledWith({
+      where: { locationId: 42 },
+      _max: { metricDate: true },
+    });
+    expect(result).toEqual(new Date("2026-07-15"));
+  });
+
+  it("保存済みデータが1件もない場合は null を返す", async () => {
+    const client = {
+      dailyMetric: {
+        aggregate: vi.fn().mockResolvedValue({ _max: { metricDate: null } }),
+      },
+    };
+
+    const result = await getLastMetricDate(client as never, 42);
+
+    expect(result).toBeNull();
   });
 });

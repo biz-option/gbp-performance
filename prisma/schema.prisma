@@ -19,11 +19,14 @@ datasource db {
 
 // 代理店(エージェンシー)。全てのビジネス(location)はいずれかの代理店に紐づく。
 model Agency {
-  id               Int      @id @default(autoincrement())
-  name             String   @db.VarChar(255)
-  googleAccountId  String?  @db.VarChar(255)
-  createdAt        DateTime @default(now()) @db.DateTime(3)
-  updatedAt        DateTime @updatedAt @db.DateTime(3)
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(255)
+  // この日付以前の daily_metrics は確定済みとみなせる、代理店単位のウォーターマーク。
+  // ある日付の取得結果に1件でも value <> 0 があれば fetchedDate - 1日 まで前進させる
+  // (詳細は docs/schema.sql の同カラムのコメント参照)。
+  confirmedThroughDate DateTime? @db.Date
+  createdAt            DateTime  @default(now()) @db.DateTime(3)
+  updatedAt            DateTime  @updatedAt @db.DateTime(3)
 
   locations Location[]
 
@@ -39,9 +42,8 @@ model Location {
   createdAt        DateTime @default(now()) @db.DateTime(3)
   updatedAt        DateTime @updatedAt @db.DateTime(3)
 
-  agency               Agency                    @relation(fields: [agencyId], references: [id])
-  dailyMetrics         DailyMetric[]
-  metricDayStatuses    LocationMetricDayStatus[]
+  agency       Agency        @relation(fields: [agencyId], references: [id])
+  dailyMetrics DailyMetric[]
 
   @@unique([agencyId, googleLocationId], name: "locations_agencyId_googleLocationId_key")
   @@map("locations")
@@ -87,25 +89,4 @@ model GoogleOauthCredential {
   updatedAt    DateTime  @updatedAt @db.DateTime(3)
 
   @@map("google_oauth_credentials")
-}
-
-// 将来のバッチジョブ(3日後取得・0件フラグ・再試行)で使うステータス管理テーブル。
-// 今回のスコープのコードでは未使用だが、スキーマ整合のため定義しておく。
-enum DayStatus {
-  PENDING
-  AVAILABLE
-}
-
-model LocationMetricDayStatus {
-  id         Int       @id @default(autoincrement())
-  locationId Int
-  metricDate DateTime  @db.Date
-  status     DayStatus @default(PENDING)
-  createdAt  DateTime  @default(now()) @db.DateTime(3)
-  updatedAt  DateTime  @updatedAt @db.DateTime(3)
-
-  location Location @relation(fields: [locationId], references: [id])
-
-  @@unique([locationId, metricDate], name: "location_metric_day_status_locationId_metricDate_key")
-  @@map("location_metric_day_status")
 }

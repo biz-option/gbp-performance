@@ -37,3 +37,30 @@ export async function getAuthorizedClient(
   client.setCredentials({ refresh_token: credential.refreshToken });
   return client;
 }
+
+/**
+ * このプロジェクトは単一のGoogleアカウント(代理店側が対象ロケーションの権限を
+ * この1アカウントに共有する運用)のみを前提としている。google_oauth_credentials に
+ * 登録されている唯一の accountLabel を返す(バッチが account を指定せずに
+ * 全location を処理できるようにするため)。0件・複数件の場合は明確なエラーで止める。
+ */
+export async function getSoleAccountLabel(prisma: CredentialClient): Promise<string> {
+  const credentials = await prisma.googleOauthCredential.findMany({
+    select: { accountLabel: true },
+  });
+
+  if (credentials.length === 0) {
+    throw new Error(
+      "google_oauth_credentials に認証情報が登録されていません。" +
+        "npm run oauth:bootstrap を実行し、表示されたリフレッシュトークンを登録してください。",
+    );
+  }
+  if (credentials.length > 1) {
+    throw new Error(
+      "google_oauth_credentials に複数の認証情報が登録されています。" +
+        "このプロジェクトは単一Googleアカウントのみを前提としています。",
+    );
+  }
+
+  return credentials[0]!.accountLabel;
+}

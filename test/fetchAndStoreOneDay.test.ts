@@ -34,6 +34,13 @@ function createMockPrisma() {
     },
     dailyMetric: {
       upsert: vi.fn().mockResolvedValue({ id: 1n }),
+      // 代理店の確定日ウォーターマーク更新(advanceConfirmedThroughDate)が内部で呼ぶ。
+      // デフォルトでは「非0のメトリクスなし」を返し、ウォーターマーク更新をスキップさせる。
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    agency: {
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
     },
   };
 }
