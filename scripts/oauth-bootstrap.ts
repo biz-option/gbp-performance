@@ -4,7 +4,7 @@
 // このスクリプトはリフレッシュトークンを画面に表示するだけで、どこにも保存しない。
 // Claude(このコードを書いたAIエージェント)は実際のリフレッシュトークンの値を
 // 見ることも扱うこともない設計になっている。取得後は、表示された値を
-// 利用者自身の手で Secret Manager / google_oauth_credentials テーブルに登録すること。
+// 利用者自身の手で google_oauth_credentials テーブルに登録すること。
 //
 // 実行方法: npm run oauth:bootstrap
 
@@ -49,8 +49,8 @@ async function main() {
   console.log("===============================================================");
   console.log("");
   console.log(
-    "この値を Secret Manager、および google_oauth_credentials テーブルへ " +
-      "手動で登録してください。このスクリプト自体はファイルへの保存や外部送信を一切行いません。",
+    "この値を google_oauth_credentials テーブルへ手動で登録してください。" +
+      "このスクリプト自体はファイルへの保存や外部送信を一切行いません。",
   );
 }
 

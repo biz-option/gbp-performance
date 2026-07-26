@@ -48,7 +48,7 @@ GCP Console の「APIとサービス」→「ライブラリ」から **Business
 
 ## 5. IAM(補足)
 
-環境変数注入方式のため、アプリ用サービスアカウントに Secret Manager への個別IAM権限は基本的に不要です。注入処理自体のIAM設定はGCPの標準手順に従ってください。
+Cloud Run Job/Service を `--set-secrets` でデプロイする場合、その実行サービスアカウントに対して各シークレットへの `roles/secretmanager.secretAccessor` を付与する必要があります(GCPが起動時にシークレット値を取得して環境変数へ注入するため)。付与方法はGCPの標準手順に従ってください。
 
 ## 6. ローカル動作確認の一連の流れ
 
