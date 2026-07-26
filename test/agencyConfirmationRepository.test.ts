@@ -5,9 +5,11 @@
 //   いつ・どこまで前進させるかというロジック。前進させる条件を間違えると、
 //   本当はまだ不確定なデータを確定済みとしてレポートしてしまったり、逆に
 //   いつまで経っても確定扱いにならなかったりする。
+//   前進条件(null または candidateWatermark より過去)を updateMany の WHERE 句に
+//   含めることで、read-then-write のレースなしにDB側でアトミックに判定させている。
 // モックについて:
-//   実DBには接続しない。PrismaClient の dailyMetric.findFirst / agency.findUniqueOrThrow /
-//   agency.update を vi.fn() で差し替える。
+//   実DBには接続しない。PrismaClient の dailyMetric.findFirst / agency.updateMany を
+//   vi.fn() で差し替える。
 
 import { describe, expect, it, vi } from "vitest";
 import { advanceConfirmedThroughDate } from "../src/db/agencyConfirmationRepository.js";
@@ -18,17 +20,15 @@ function createMockClient() {
       findFirst: vi.fn(),
     },
     agency: {
-      findUniqueOrThrow: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   };
 }
 
 describe("advanceConfirmedThroughDate", () => {
-  it("非0のメトリクスが1件でもあれば、fetchedDate の前日まで前進させる", async () => {
+  it("非0のメトリクスが1件でもあれば、fetchedDate の前日まで前進させる(null or 過去日のときだけ)", async () => {
     const client = createMockClient();
     client.dailyMetric.findFirst.mockResolvedValue({ id: 1n });
-    client.agency.findUniqueOrThrow.mockResolvedValue({ confirmedThroughDate: null });
 
     await advanceConfirmedThroughDate(client as never, {
       agencyId: 1,
@@ -43,8 +43,14 @@ describe("advanceConfirmedThroughDate", () => {
       },
       select: { id: true },
     });
-    expect(client.agency.update).toHaveBeenCalledWith({
-      where: { id: 1 },
+    expect(client.agency.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 1,
+        OR: [
+          { confirmedThroughDate: null },
+          { confirmedThroughDate: { lt: new Date("2026-07-19T00:00:00.000Z") } },
+        ],
+      },
       data: { confirmedThroughDate: new Date("2026-07-19T00:00:00.000Z") },
     });
   });
@@ -58,37 +64,6 @@ describe("advanceConfirmedThroughDate", () => {
       fetchedDate: new Date("2026-07-20T00:00:00.000Z"),
     });
 
-    expect(client.agency.findUniqueOrThrow).not.toHaveBeenCalled();
-    expect(client.agency.update).not.toHaveBeenCalled();
-  });
-
-  it("既存の confirmedThroughDate の方が新しい場合は後退させない", async () => {
-    const client = createMockClient();
-    client.dailyMetric.findFirst.mockResolvedValue({ id: 1n });
-    client.agency.findUniqueOrThrow.mockResolvedValue({
-      confirmedThroughDate: new Date("2026-07-25T00:00:00.000Z"),
-    });
-
-    await advanceConfirmedThroughDate(client as never, {
-      agencyId: 1,
-      fetchedDate: new Date("2026-07-20T00:00:00.000Z"),
-    });
-
-    expect(client.agency.update).not.toHaveBeenCalled();
-  });
-
-  it("既存の confirmedThroughDate と候補日が同じ場合も更新しない(冪等性)", async () => {
-    const client = createMockClient();
-    client.dailyMetric.findFirst.mockResolvedValue({ id: 1n });
-    client.agency.findUniqueOrThrow.mockResolvedValue({
-      confirmedThroughDate: new Date("2026-07-19T00:00:00.000Z"),
-    });
-
-    await advanceConfirmedThroughDate(client as never, {
-      agencyId: 1,
-      fetchedDate: new Date("2026-07-20T00:00:00.000Z"),
-    });
-
-    expect(client.agency.update).not.toHaveBeenCalled();
+    expect(client.agency.updateMany).not.toHaveBeenCalled();
   });
 });

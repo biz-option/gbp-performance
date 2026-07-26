@@ -25,6 +25,11 @@ CREATE TABLE `agencies` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- 上記CREATE TABLEは新規DB作成時点のスナップショット。既に agencies テーブルが
+-- 存在するDB(confirmedThroughDate列がまだ無いもの)に対しては、以下を実行して
+-- 追従させる(MySQL 8.0.29+ の IF NOT EXISTS で複数回実行しても安全)。
+-- ALTER TABLE `agencies` ADD COLUMN IF NOT EXISTS `confirmedThroughDate` DATE NULL;
+
 CREATE TABLE `locations` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `agencyId` INTEGER NOT NULL,

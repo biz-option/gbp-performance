@@ -35,17 +35,14 @@ export async function advanceConfirmedThroughDate(
 
   const candidateWatermark = addDays(input.fetchedDate, -1);
 
-  const agency = await client.agency.findUniqueOrThrow({
-    where: { id: input.agencyId },
-    select: { confirmedThroughDate: true },
-  });
-
-  if (agency.confirmedThroughDate && agency.confirmedThroughDate >= candidateWatermark) {
-    return;
-  }
-
-  await client.agency.update({
-    where: { id: input.agencyId },
+  // 「読んでから条件判定して更新」だと、並行実行時に前進条件の判定と書き込みの間に
+  // 他プロセスの更新が割り込むレースが起こりうる。WHERE句に前進条件そのものを
+  // 含めた1回のUPDATEにすることで、DB側に前進判定ごとアトミックに任せる。
+  await client.agency.updateMany({
+    where: {
+      id: input.agencyId,
+      OR: [{ confirmedThroughDate: null }, { confirmedThroughDate: { lt: candidateWatermark } }],
+    },
     data: { confirmedThroughDate: candidateWatermark },
   });
 }

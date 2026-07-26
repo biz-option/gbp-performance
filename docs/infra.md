@@ -80,10 +80,10 @@ GCP Console の「APIとサービス」→「ライブラリ」から **Business
    gcloud run jobs create fetch-daily-batch \
      --image=<region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest \
      --region=<region> \
-     --set-secrets=DATABASE_URL=gbp-performance-database-url:latest,\
-   GOOGLE_OAUTH_CLIENT_ID=gbp-performance-oauth-client-id:latest,\
-   GOOGLE_OAUTH_CLIENT_SECRET=gbp-performance-oauth-client-secret:latest,\
-   GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest
+     --set-secrets="DATABASE_URL=gbp-performance-database-url:latest,\
+GOOGLE_OAUTH_CLIENT_ID=gbp-performance-oauth-client-id:latest,\
+GOOGLE_OAUTH_CLIENT_SECRET=gbp-performance-oauth-client-secret:latest,\
+GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest"
    ```
 3. **Cloud Scheduler からJobを起動するためのサービスアカウント**を作成し、そのJobに対して `roles/run.invoker` を付与する。
 4. **Cloud Scheduler ジョブの作成**。ターゲットはHTTP、Cloud Run Admin API の `jobs.run` エンドポイントを叩き、認証は手順3のサービスアカウントによるOIDCトークンを使う。

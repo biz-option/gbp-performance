@@ -101,18 +101,54 @@ describe("runDailyBatch", () => {
     expect(fetchAndStoreOneDay).not.toHaveBeenCalled();
   });
 
-  it("1日の取得が失敗しても他の日の処理は継続し、failed に記録される", async () => {
+  // 失敗した日をまたいで後続日だけ保存されると、次回実行時の再開位置(MAX(metricDate))が
+  // 失敗日を追い越してしまい、失敗日が永久に再取得されなくなる。それを防ぐため、
+  // 失敗した時点でそのlocationの以降の日付は取得しに行かないことを確認する。
+  it("1日の取得が失敗したら、そのlocationの以降の日付は取得しにいかない", async () => {
     vi.mocked(getLastMetricDate).mockResolvedValue(new Date("2026-07-12T00:00:00.000Z"));
     vi.mocked(fetchAndStoreOneDay).mockRejectedValueOnce(new Error("API error"));
     const prisma = createMockPrisma([{ id: 1, agencyId: 10, googleLocationId: "loc-1" }]);
 
     const summary = await runDailyBatch(prisma as never, { now: NOW });
 
-    expect(fetchAndStoreOneDay).toHaveBeenCalledTimes(3);
+    expect(fetchAndStoreOneDay).toHaveBeenCalledTimes(1);
+    expect(fetchAndStoreOneDay).toHaveBeenCalledWith(prisma, {
+      googleLocationId: "loc-1",
+      date: "2026-07-13",
+      accountLabel: "agency-a",
+    });
     expect(summary.failed).toEqual([
       { locationId: 1, date: "2026-07-13", error: new Error("API error") },
     ]);
-    expect(summary.succeeded).toEqual([
+    expect(summary.succeeded).toEqual([]);
+  });
+
+  // 上のテストの続き: 失敗日がDBに保存されなかった(=MAX(metricDate)が進んでいない)ことを
+  // 前提に次回実行すると、同じ日付が再取得対象になる(=失敗日が永久にスキップされない)ことを確認する。
+  it("失敗した日は次回実行時に再取得される(再開位置が失敗日を追い越さない)", async () => {
+    vi.mocked(getLastMetricDate).mockResolvedValue(new Date("2026-07-12T00:00:00.000Z"));
+    const prisma = createMockPrisma([{ id: 1, agencyId: 10, googleLocationId: "loc-1" }]);
+
+    vi.mocked(fetchAndStoreOneDay).mockRejectedValueOnce(new Error("API error"));
+    await runDailyBatch(prisma as never, { now: NOW });
+
+    // 1回目の失敗によりDBには何も保存されていないため、getLastMetricDate の返り値は変わらない
+    // (実DBではこれは MAX(metricDate) が前回と同じであることに相当する)。
+    vi.mocked(fetchAndStoreOneDay).mockResolvedValue({
+      locationId: 1,
+      metricDate: "dummy",
+      stored: [],
+      skipped: [],
+    });
+    const secondSummary = await runDailyBatch(prisma as never, { now: NOW });
+
+    // calls[0] は1回目実行(失敗した07-13)。2回目実行の最初の呼び出し(calls[1])が
+    // 07-14からではなく07-13から再開していることを確認する。
+    expect(vi.mocked(fetchAndStoreOneDay).mock.calls[1]?.[1]).toMatchObject({
+      date: "2026-07-13",
+    });
+    expect(secondSummary.succeeded).toEqual([
+      { locationId: 1, date: "2026-07-13" },
       { locationId: 1, date: "2026-07-14" },
       { locationId: 1, date: "2026-07-15" },
     ]);

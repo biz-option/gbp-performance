@@ -28,6 +28,11 @@ type Deps = Pick<PrismaClient, "location" | "googleOauthCredential" | "dailyMetr
  * 1日ずつ順に取得する。これにより、バッチが数日実行されなかった場合でも、
  * 次回実行時に欠損分をまとめて取得できる。
  *
+ * あるlocationのある日付の取得に失敗した場合、そのlocationの以降の日付は
+ * このバッチ内では取得しにいかない(次回実行時に同じ日から再開する)。
+ * 失敗日をまたいで後続日だけ保存してしまうと、getLastMetricDate が返す
+ * MAX(metricDate) が失敗日を追い越してしまい、失敗日が永久に再取得されなくなるため。
+ *
  * このプロジェクトは単一のGoogleアカウント(代理店側がロケーションの権限をこの1アカウントに
  * 共有する運用)を前提としているため、accountLabel は代理店ごとではなく全location共通で
  * 1つだけ解決する(getSoleAccountLabel)。
@@ -58,6 +63,7 @@ export async function runDailyBatch(
         summary.succeeded.push({ locationId: location.id, date: dateStr });
       } catch (error) {
         summary.failed.push({ locationId: location.id, date: dateStr, error });
+        break;
       }
       date = addDays(date, 1);
     }
