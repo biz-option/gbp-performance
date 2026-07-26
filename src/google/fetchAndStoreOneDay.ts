@@ -3,6 +3,7 @@ import { getAuthorizedClient } from "./oauthClient.js";
 import { fetchDailyMetrics, type DateComponents } from "./performanceApiClient.js";
 import { ALL_TRACKED_GOOGLE_METRICS, mapGoogleMetricToDbEnum } from "./metricMapping.js";
 import { upsertDailyMetric } from "../db/dailyMetricsRepository.js";
+import { advanceConfirmedThroughDate } from "../db/agencyConfirmationRepository.js";
 
 export interface FetchAndStoreOneDayParams {
   googleLocationId: string;
@@ -19,12 +20,13 @@ export interface FetchAndStoreOneDaySummary {
   skipped: string[];
 }
 
-type Deps = Pick<PrismaClient, "location" | "googleOauthCredential" | "dailyMetric">;
+type Deps = Pick<PrismaClient, "location" | "googleOauthCredential" | "dailyMetric" | "agency">;
 
 /**
  * 指定した1ロケーション・1日分のパフォーマンスデータを Google API から取得し、
- * daily_metrics に保存する。3日後取得ルールや0件フラグ・再試行ロジックは適用しない
- * 単純な1回取得(このスライスのスコープ、詳細は docs/schema.sql の設計コメント参照)。
+ * daily_metrics に保存する単純な1回取得(いつ・どの日付を取得するかの判断はこの関数の
+ * 呼び出し側の責務)。保存後、この日付に非0のメトリクスがあれば、所属する代理店の
+ * confirmedThroughDate を前進させる(詳細は agencyConfirmationRepository 参照)。
  */
 export async function fetchAndStoreOneDay(
   prisma: Deps,
@@ -69,6 +71,11 @@ export async function fetchAndStoreOneDay(
     });
     stored.push({ metricType, value: entry.value });
   }
+
+  await advanceConfirmedThroughDate(prisma, {
+    agencyId: location.agencyId,
+    fetchedDate: metricDate,
+  });
 
   return { locationId: location.id, metricDate: params.date, stored, skipped };
 }

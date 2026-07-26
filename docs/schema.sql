@@ -10,10 +10,15 @@
 --
 -- 外部キー制約(FK)は意図的に付与していません。整合性はアプリケーションコード側で担保します。
 
+-- `confirmedThroughDate`: この日付以前の daily_metrics は確定済みとみなせる、という
+-- 代理店単位のウォーターマーク。ある日付(fetchedDate)のデータ取得結果に1件でも
+-- value <> 0 の行があれば、その代理店の confirmedThroughDate を fetchedDate - 1日 まで
+-- 前進させる(後退はさせない)。0件が続く日は、値そのものを再取得することはせず、
+-- 将来のより新しい日付で非0が観測された時点でまとめて確定扱いに含まれる。
 CREATE TABLE `agencies` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(255) NOT NULL,
-    `googleAccountId` VARCHAR(255) NULL,
+    `confirmedThroughDate` DATE NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -56,19 +61,5 @@ CREATE TABLE `google_oauth_credentials` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `google_oauth_credentials_accountLabel_key`(`accountLabel`),
-    PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- 将来のバッチジョブ(3日後取得・0件フラグ・再試行ロジック)のためのステータス管理テーブル。
--- 現時点のコードでは未使用だが、DB作成時点でスキーマを揃えておく。
-CREATE TABLE `location_metric_day_status` (
-    `id` INTEGER NOT NULL AUTO_INCREMENT,
-    `locationId` INTEGER NOT NULL,
-    `metricDate` DATE NOT NULL,
-    `status` ENUM('PENDING', 'AVAILABLE') NOT NULL DEFAULT 'PENDING',
-    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updatedAt` DATETIME(3) NOT NULL,
-
-    UNIQUE INDEX `location_metric_day_status_locationId_metricDate_key`(`locationId`, `metricDate`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

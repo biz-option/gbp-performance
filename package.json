@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "oauth:bootstrap": "tsx scripts/oauth-bootstrap.ts",
     "fetch:one-day": "tsx scripts/fetch-one-day.ts",
+    "fetch:daily-batch": "tsx scripts/fetch-daily-batch.ts",
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
