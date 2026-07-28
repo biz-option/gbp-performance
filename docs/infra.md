@@ -19,8 +19,9 @@
    - スキーマ変更の正となるDDLファイルです。`prisma migrate` は使わず、変更時は必ず人間が確認した上で手動実行してください。
 6. `gbp_app` ユーザーの接続情報を `DATABASE_URL` として使う:
    ```text
-   mysql://gbp_app:<パスワード>@<接続先ホスト>:3306/gbp_performance
+   mariadb://gbp_app:<パスワード>@<接続先ホスト>:3306/gbp_performance?allowPublicKeyRetrieval=true
    ```
+   - `allowPublicKeyRetrieval=true` が無いと、MySQL8のデフォルト認証方式(`caching_sha2_password`)がSSL無し接続でRSA公開鍵を取得できず、`RSA public key is not available client side` エラーになる。
 
 ## 2. Secret Manager に登録するシークレット
 
@@ -28,7 +29,7 @@
 
 | Secret Manager 上のシークレット(例) | 対応する環境変数名 | 内容 |
 |---|---|---|
-| `gbp-performance-database-url` | `DATABASE_URL` | Cloud SQLへの接続文字列(`mysql://user:password@host:3306/gbp_performance`) |
+| `gbp-performance-database-url` | `DATABASE_URL` | Cloud SQLへの接続文字列(`mariadb://user:password@host:3306/gbp_performance`) |
 | `gbp-performance-oauth-client-id` | `GOOGLE_OAUTH_CLIENT_ID` | OAuthクライアントID |
 | `gbp-performance-oauth-client-secret` | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuthクライアントシークレット |
 | `gbp-performance-oauth-redirect-uri` | `GOOGLE_OAUTH_REDIRECT_URI` | OAuthリダイレクトURI |

@@ -6,6 +6,7 @@
 // 実行例:
 //   npm run fetch:daily-batch
 
+import "dotenv/config";
 import { prisma } from "../src/db/prismaClient.js";
 import { runDailyBatch } from "../src/google/fetchDailyBatch.js";
 
