@@ -8,6 +8,7 @@
 // このスクリプトは薄いラッパーで、実処理は src/google/fetchAndStoreOneDay.ts が行う
 // (ロジック本体をCLIから切り離すことで、プロセスを起動せずにテストできるようにしている)。
 
+import "dotenv/config";
 import { prisma } from "../src/db/prismaClient.js";
 import { fetchAndStoreOneDay } from "../src/google/fetchAndStoreOneDay.js";
 

@@ -8,6 +8,7 @@
 //
 // 実行方法: npm run oauth:bootstrap
 
+import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { createOAuth2Client, GOOGLE_BUSINESS_PROFILE_SCOPES } from "../src/google/oauthClient.js";
 
