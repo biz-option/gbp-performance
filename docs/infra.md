@@ -29,7 +29,7 @@
 
 | Secret Manager 上のシークレット(例) | 対応する環境変数名 | 内容 |
 |---|---|---|
-| `gbp-performance-database-url` | `DATABASE_URL` | Cloud SQLへの接続文字列(`mariadb://user:password@host:3306/gbp_performance`) |
+| `gbp-performance-database-url` | `DATABASE_URL` | Cloud SQLへの接続文字列(`mariadb://user:password@host:3306/gbp_performance?allowPublicKeyRetrieval=true`) |
 | `gbp-performance-oauth-client-id` | `GOOGLE_OAUTH_CLIENT_ID` | OAuthクライアントID |
 | `gbp-performance-oauth-client-secret` | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuthクライアントシークレット |
 | `gbp-performance-oauth-redirect-uri` | `GOOGLE_OAUTH_REDIRECT_URI` | OAuthリダイレクトURI |
