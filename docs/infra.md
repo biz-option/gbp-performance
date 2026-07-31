@@ -68,36 +68,45 @@ Cloud Run Job/Service を `--set-secrets` でデプロイする場合、その�
 `fetch-daily-batch` はHTTPサーバーを持たない実行完了型バッチなので、Cloud Run **Job**(Serviceではない)としてデプロイし、Cloud Scheduler からキックする構成を想定しています。実際のリソース作成は他の章と同様、人間が手動で行ってください。
 
 1. **コンテナイメージのビルド・push**(リポジトリルートの `Dockerfile` を使用)
+   - Apple Silicon Mac等でビルドする場合、`--platform linux/amd64` を付けないとCloud Runが受け付けないイメージ(arm64)になるので注意。
    ```text
-   gcloud artifacts repositories create gbp-performance --repository-format=docker --location=<region>
-   docker build -t <region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest .
-   docker push <region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest
+   gcloud artifacts repositories create gbp-performance --repository-format=docker --location=asia-northeast1
+   docker build --platform linux/amd64 -t asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest .
+   docker push asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest
    ```
-2. **Cloud Run Job の作成**(環境変数の注入方法は2章のSecret Managerと同じ `--set-secrets` を使う)
+2. **Cloud SQLへの接続方式について**: この構成(VPCコネクタ/Direct VPC egress + Cloud NATによる送信IP固定を組んでいない)では送信IPが固定されないため、Cloud SQLの「承認済みネットワーク」によるIP許可リストでは接続できない。代わりにCloud SQL Auth Proxy(Unixソケット)経由で接続する(アプリコード側は `CLOUD_SQL_CONNECTION_NAME` 環境変数が設定されているとソケット接続に自動的に切り替わる。`src/db/prismaClient.ts` 参照)。
+   - Cloud Run Jobの実行サービスアカウント(デフォルトは `<プロジェクト番号>-compute@developer.gserviceaccount.com`)に `roles/cloudsql.client` を付与しておく。
+   ```text
+   gcloud sql instances describe gbp-performance-sql-instance --format="value(connectionName)"
+   ```
+3. **Cloud Run Job の作成**(環境変数の注入方法は2章のSecret Managerと同じ `--set-secrets` を使う。`--set-cloudsql-instances` でCloud SQL Auth Proxyの接続を有効化し、`CLOUD_SQL_CONNECTION_NAME` にその接続名を渡す)
    ```text
    gcloud run jobs create fetch-daily-batch \
-     --image=<region>-docker.pkg.dev/<project>/gbp-performance/fetch-daily-batch:latest \
-     --region=<region> \
+     --image=asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest \
+     --region=asia-northeast1 \
+     --set-cloudsql-instances=oaky-gmb:asia-northeast1:gbp-performance-sql-instance \
+     --set-env-vars="CLOUD_SQL_CONNECTION_NAME=oaky-gmb:asia-northeast1:gbp-performance-sql-instance" \
      --set-secrets="DATABASE_URL=gbp-performance-database-url:latest,\
 GOOGLE_OAUTH_CLIENT_ID=gbp-performance-oauth-client-id:latest,\
 GOOGLE_OAUTH_CLIENT_SECRET=gbp-performance-oauth-client-secret:latest,\
 GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest"
    ```
-3. **Cloud Scheduler からJobを起動するためのサービスアカウント**を作成し、そのJobに対して `roles/run.invoker` を付与する。
-4. **Cloud Scheduler ジョブの作成**。ターゲットはHTTP、Cloud Run Admin API の `jobs.run` エンドポイントを叩き、認証は手順3のサービスアカウントによるOIDCトークンを使う。
+   既存のJobを更新する場合は `create` の代わりに `update` を使う(オプションは同じ)。
+4. **Cloud Scheduler からJobを起動するためのサービスアカウント**を作成し、そのJobに対して `roles/run.invoker` を付与する。
+5. **Cloud Scheduler ジョブの作成**。ターゲットはHTTP、Cloud Run Admin API の `jobs.run` エンドポイントを叩き、認証は手順4のサービスアカウントによるOIDCトークンを使う。
    ```text
    gcloud scheduler jobs create http fetch-daily-batch-trigger \
      --location=<region> \
      --schedule="0 18 * * *" \
      --time-zone="Asia/Tokyo" \
-     --uri="https://run.googleapis.com/v2/projects/<project>/locations/<region>/jobs/fetch-daily-batch:run" \
+     --uri="https://run.googleapis.com/v2/projects/oaky-gmb/locations/<region>/jobs/fetch-daily-batch:run" \
      --http-method=POST \
      --oauth-service-account-email=<scheduler用サービスアカウント>
    ```
    スケジュール(`--schedule`)は例です。データ取得対象日は実行日の5日前で固定計算されるため、1日1回実行すれば十分です。
-5. Cloud Run Job の実行ログ(成功/失敗件数、スキップしたlocation)は標準出力に出るため、Cloud Logging で確認できます。
+6. Cloud Run Job の実行ログ(成功/失敗件数、スキップしたlocation)は標準出力に出るため、Cloud Logging で確認できます。
 
 ## 未確定・将来の課題
 
-- 上記の Cloud Scheduler / Cloud Run Job 設定は手順としてドキュメント化したのみで、実際の作成(gcloudコマンドの実行)はまだ行われていません。
+- 上記の Cloud Scheduler / Cloud Run Job 設定は実際に作成済み(`fetch-daily-batch` Job、`fetch-daily-batch-trigger` Scheduler)。手動実行での動作確認は完了しているが、Scheduler経由の自動実行(毎日18:00 JST)はまだ実績がないため、初回実行後にログを確認すること。
 - `fetch-daily-batch` は「単一Googleアカウントのみを前提とする」設計です(`google_oauth_credentials` に2件以上登録されているとエラーで停止する)。将来、代理店ごとに別のGoogleアカウントを使う運用に変わった場合は設計の見直しが必要です。

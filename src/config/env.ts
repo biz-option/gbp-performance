@@ -16,6 +16,13 @@ export function getDatabaseUrl(): string {
   return requireEnv("DATABASE_URL");
 }
 
+// Cloud Run上ではCloud SQL Auth Proxyが /cloudsql/<connectionName> にUnixソケットを
+// マウントする。この環境変数が設定されている場合はソケット経由、未設定ならDATABASE_URLの
+// host:portでTCP接続する(ローカル開発時は未設定のままでよい)。
+export function getCloudSqlConnectionName(): string | undefined {
+  return process.env.CLOUD_SQL_CONNECTION_NAME;
+}
+
 export interface GoogleOAuthClientConfig {
   clientId: string;
   clientSecret: string;
