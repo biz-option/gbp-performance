@@ -74,17 +74,17 @@ Cloud Run Job/Service を `--set-secrets` でデプロイする場合、その�
    docker build --platform linux/amd64 -t asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest .
    docker push asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest
    ```
-2. **Cloud SQLへの接続方式について**: Cloud Runは送信IPが固定されないため、Cloud SQLの「承認済みネットワーク」によるIP許可リストでは接続できない。代わりにCloud SQL Auth Proxy(Unixソケット)経由で接続する(アプリコード側は `CLOUD_SQL_CONNECTION_NAME` 環境変数が設定されているとソケット接続に自動的に切り替わる。`src/db/prismaClient.ts` 参照)。
+2. **Cloud SQLへの接続方式について**: この構成(VPCコネクタ/Direct VPC egress + Cloud NATによる送信IP固定を組んでいない)では送信IPが固定されないため、Cloud SQLの「承認済みネットワーク」によるIP許可リストでは接続できない。代わりにCloud SQL Auth Proxy(Unixソケット)経由で接続する(アプリコード側は `CLOUD_SQL_CONNECTION_NAME` 環境変数が設定されているとソケット接続に自動的に切り替わる。`src/db/prismaClient.ts` 参照)。
    - Cloud Run Jobの実行サービスアカウント(デフォルトは `<プロジェクト番号>-compute@developer.gserviceaccount.com`)に `roles/cloudsql.client` を付与しておく。
    ```text
    gcloud sql instances describe gbp-performance-sql-instance --format="value(connectionName)"
    ```
-3. **Cloud Run Job の作成**(環境変数の注入方法は2章のSecret Managerと同じ `--set-secrets` を使う。`--add-cloudsql-instances` でCloud SQL Auth Proxyの接続を有効化し、`CLOUD_SQL_CONNECTION_NAME` にその接続名を渡す)
+3. **Cloud Run Job の作成**(環境変数の注入方法は2章のSecret Managerと同じ `--set-secrets` を使う。`--set-cloudsql-instances` でCloud SQL Auth Proxyの接続を有効化し、`CLOUD_SQL_CONNECTION_NAME` にその接続名を渡す)
    ```text
    gcloud run jobs create fetch-daily-batch \
      --image=asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest \
      --region=asia-northeast1 \
-     --add-cloudsql-instances=oaky-gmb:asia-northeast1:gbp-performance-sql-instance \
+     --set-cloudsql-instances=oaky-gmb:asia-northeast1:gbp-performance-sql-instance \
      --set-env-vars="CLOUD_SQL_CONNECTION_NAME=oaky-gmb:asia-northeast1:gbp-performance-sql-instance" \
      --set-secrets="DATABASE_URL=gbp-performance-database-url:latest,\
 GOOGLE_OAUTH_CLIENT_ID=gbp-performance-oauth-client-id:latest,\
