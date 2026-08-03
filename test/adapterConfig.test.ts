@@ -14,25 +14,25 @@ import { buildAdapterConfig } from "../src/db/adapterConfig.js";
 
 describe("buildAdapterConfig", () => {
   it("CLOUD_SQL_CONNECTION_NAME未設定時は、DATABASE_URLの文字列をそのまま返す(TCP接続)", () => {
-    const url = "mariadb://gbp_app:pass123@35.194.113.60:3306/gbp_performance_db?allowPublicKeyRetrieval=true";
+    const url = "mariadb://gbp_app:pass123@35.194.113.60:3306/gbp_performance?allowPublicKeyRetrieval=true";
     expect(buildAdapterConfig(url, undefined)).toBe(url);
   });
 
   it("CLOUD_SQL_CONNECTION_NAME設定時は、Unixソケット用のPoolConfigに変換する", () => {
-    const url = "mariadb://gbp_app:pass123@35.194.113.60:3306/gbp_performance_db?allowPublicKeyRetrieval=true";
+    const url = "mariadb://gbp_app:pass123@35.194.113.60:3306/gbp_performance?allowPublicKeyRetrieval=true";
     const config = buildAdapterConfig(url, "oaky-gmb:asia-northeast1:gbp-performance-sql-instance");
 
     expect(config).toEqual({
       socketPath: "/cloudsql/oaky-gmb:asia-northeast1:gbp-performance-sql-instance",
       user: "gbp_app",
       password: "pass123",
-      database: "gbp_performance_db",
+      database: "gbp_performance",
       allowPublicKeyRetrieval: true,
     });
   });
 
   it("ソケット接続時、URLエンコードされたパスワードをデコードして引き継ぐ", () => {
-    const url = "mariadb://gbp_app:p%40ss%3A123@35.194.113.60:3306/gbp_performance_db";
+    const url = "mariadb://gbp_app:p%40ss%3A123@35.194.113.60:3306/gbp_performance";
     const config = buildAdapterConfig(url, "oaky-gmb:asia-northeast1:gbp-performance-sql-instance");
 
     expect(config).toMatchObject({

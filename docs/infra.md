@@ -4,10 +4,44 @@
 
 ## 1. Cloud SQL (MySQL) の準備
 
-1. GCP Console から Cloud SQL for MySQL のインスタンスを作成する(認証方式は「組み込み認証」でよい)。
+1. Cloud SQLインスタンスを作成する(認証方式は「組み込み認証」でよい)。GCP Consoleでも良いが、`edition`/`tier`を確実に指定するためコマンドを推奨:
+   ```bash
+   gcloud sql instances create gbp-performance-sql-instance \
+     --project=oaky-gmb \
+     --database-version=MYSQL_8_4 \
+     --region=asia-northeast1 \
+     --edition=ENTERPRISE \
+     --tier=db-f1-micro \
+     --storage-type=SSD \
+     --storage-size=10 \
+     --no-storage-auto-increase \
+     --availability-type=ZONAL \
+     --backup-start-time=03:00 \
+     --enable-bin-log
+   ```
+   - インスタンス名は英小文字・数字・ハイフンのみ(アンダースコア不可)。既存のデプロイ設定(7章)と合わせるため `gbp-performance-sql-instance` で固定する。
+   - `db-f1-micro`(共有コア・Enterpriseエディション)を選んでいるのは、日次バッチ(1日1回、locationあたり数件のupsertで合計100件程度)+月数回のGoogle データポータル参照、という小規模な利用実態に対してコストを最適化するため。当初 `db-perf-optimized-N-8` + `ENTERPRISE_PLUS`($1.45/時間 ≒ 月$1,000超)で作成してしまい、大幅な無駄が発生した経緯がある。
+   - **無料トライアル中のプロジェクトで作成したインスタンスは、後から`gcloud sql instances patch`で`edition`/`tier`を変更できない**(`HTTPError 400: ... not allowed for Cloud SQL Free Trial Instance`)。サイズを見直したい場合は、請求先アカウントを有料アップグレードするか、目的の構成で作り直す必要がある。
 2. インスタンス内にデータベース(例: `gbp_performance`)を作成する。
-3. Cloud SQL Studio に `root` ユーザーでログインする。
-4. アプリ専用のDBユーザーを作成する(`root` は初期セットアップ専用とし、アプリの日常的な接続には使わない):
+   ```bash
+   gcloud sql databases create gbp_performance \
+     --instance=gbp-performance-sql-instance --project=oaky-gmb \
+     --charset=utf8mb4 --collation=utf8mb4_unicode_ci
+   ```
+3. `root`ユーザーのパスワードを設定する(インスタンス作成時に`--root-password`を指定しない場合、未設定のままだとCloud SQL Studio等でログインできない):
+   ```bash
+   gcloud sql users set-password root --host=% \
+     --instance=gbp-performance-sql-instance --project=oaky-gmb \
+     --prompt-for-password
+   ```
+4. Cloud SQL Studio に `root` ユーザーでログインする。
+   - Cloud SQL Studioではなく手元の`mysql`クライアントで直接つなぐ場合は、事前に自分のグローバルIPを承認済みネットワークに追加する必要がある(公開IP接続はデフォルトで全拒否のため):
+     ```bash
+     gcloud sql instances patch gbp-performance-sql-instance \
+       --project=oaky-gmb --authorized-networks=<自分のグローバルIP>/32
+     ```
+     作業が終わったらセキュリティのため `--clear-authorized-networks` で戻すことを推奨。
+5. アプリ専用のDBユーザーを作成する(`root` は初期セットアップ専用とし、アプリの日常的な接続には使わない):
    ```sql
    CREATE USER 'gbp_app'@'%' IDENTIFIED BY '強力なパスワードをここに';
    GRANT SELECT, INSERT, UPDATE, DELETE ON gbp_performance.* TO 'gbp_app'@'%';
@@ -15,9 +49,9 @@
    ```
    - パスワードは自分で生成し、Secret Managerと `.env` にのみ登録する(Claudeには共有しない)。
    - `DATABASE_URL` はURL形式のため、パスワードに `@` `:` `/` `#` `%` などの記号を含めると接続文字列があいまいになります。英数字のみのパスワードを生成するか、含める場合は該当文字をURLエンコードしてから `DATABASE_URL` に埋め込んでください。
-5. `docs/schema.sql` の内容を、そのDBに対して手動で実行する(`root` のままで可)。
+6. `docs/schema.sql` の内容を、そのDBに対して手動で実行する(`root` のままで可)。
    - スキーマ変更の正となるDDLファイルです。`prisma migrate` は使わず、変更時は必ず人間が確認した上で手動実行してください。
-6. `gbp_app` ユーザーの接続情報を `DATABASE_URL` として使う:
+7. `gbp_app` ユーザーの接続情報を `DATABASE_URL` として使う:
    ```text
    mariadb://gbp_app:<パスワード>@<接続先ホスト>:3306/gbp_performance?allowPublicKeyRetrieval=true
    ```
