@@ -112,4 +112,20 @@ describe("fetchAndStoreSearchKeywordsForMonth", () => {
       }),
     ).rejects.toThrow(/YYYY-MM/);
   });
+
+  // 形式(YYYY-MM)は正しくても月の範囲(01〜12)を外れている場合、
+  // Date生成やAPI呼び出しに渡す前に早期にエラーとする。
+  it.each(["2026-00", "2026-13"])("month の月が範囲外(%s)の場合はエラーになる", async (month) => {
+    const prisma = createMockPrisma();
+
+    await expect(
+      fetchAndStoreSearchKeywordsForMonth(prisma as never, {
+        googleLocationId: "loc-1",
+        month,
+        accountLabel: "agency-a",
+      }),
+    ).rejects.toThrow(/YYYY-MM/);
+
+    expect(fetchSearchKeywords).not.toHaveBeenCalled();
+  });
 });

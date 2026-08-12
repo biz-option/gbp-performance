@@ -65,11 +65,12 @@ export async function fetchAndStoreSearchKeywordsForMonth(
 
 function parseMonthComponents(month: string): MonthComponents {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
-  if (!match) {
+  const monthNumber = match ? Number(match[2]) : NaN;
+  if (!match || monthNumber < 1 || monthNumber > 12) {
     throw new Error(`month は YYYY-MM 形式で指定してください(渡された値: "${month}")`);
   }
   return {
     year: Number(match[1]),
-    month: Number(match[2]),
+    month: monthNumber,
   };
 }
