@@ -56,6 +56,26 @@ CREATE TABLE `daily_metrics` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Google Business Profile Performance API の searchkeywords.impressions.monthly が返す、
+-- 「そのビジネスがどんな検索語句で表示されたか」の月次集計。
+-- `value`: 実際のユニークユーザー数(APIがそのまま返した場合)。
+-- `belowThreshold`: APIがプライバシー保護のため実数を返さず閾値のみ返した場合、その閾値
+-- (実際の値はこの値未満)。value と belowThreshold は排他(どちらか一方のみ非NULL)。
+CREATE TABLE `search_keyword_metrics` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `locationId` INTEGER NOT NULL,
+    `metricMonth` DATE NOT NULL,
+    `searchKeyword` VARCHAR(255) NOT NULL,
+    `value` INTEGER NULL,
+    `belowThreshold` INTEGER NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `search_keyword_metrics_metricMonth_idx`(`metricMonth`),
+    UNIQUE INDEX `search_keyword_metrics_locationId_metricMonth_searchKeyword_key`(`locationId`, `metricMonth`, `searchKeyword`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE TABLE `google_oauth_credentials` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `accountLabel` VARCHAR(255) NOT NULL,
