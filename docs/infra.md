@@ -96,6 +96,7 @@ Cloud Run Job/Service を `--set-secrets` でデプロイする場合、その�
 7. `npm run fetch:one-day -- --location=<googleLocationId> --date=YYYY-MM-DD --account=<accountLabel>` を実行する(1ロケーション・1日分の動作確認用)。
 8. `daily_metrics` テーブルに行が保存されていることを確認する。
 9. 複数ロケーションをまとめて確認したい場合は `npm run fetch:daily-batch` を実行する(全locationを巡回し、実行日の5日前までの未取得日をキャッチアップ。使用するGoogleアカウントは `google_oauth_credentials` の唯一の行から自動解決。詳細は7章)。
+10. 検索キーワードランキング(月次)を確認したい場合は `npm run fetch:search-keywords -- --location=<googleLocationId> --month=YYYY-MM --account=<accountLabel>` を実行する。`search_keyword_metrics` テーブルに行が保存されていることを確認する。全ロケーションまとめて確認する場合は `npm run fetch:search-keywords-batch` を実行する(考え方は日次バッチと同じ。詳細はREADMEの「検索キーワードランキングの取得」章)。
 
 ## 7. 定期実行(Cloud Scheduler + Cloud Run Jobs)
 
@@ -140,7 +141,28 @@ GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest"
    スケジュール(`--schedule`)は例です。データ取得対象日は実行日の5日前で固定計算されるため、1日1回実行すれば十分です。
 6. Cloud Run Job の実行ログ(成功/失敗件数、スキップしたlocation)は標準出力に出るため、Cloud Logging で確認できます。
 
+### 検索キーワードランキング月次バッチ(`fetch-search-keywords-batch`)を同様にデプロイする場合
+
+現状の `Dockerfile` は `CMD ["node", "dist/scripts/fetch-daily-batch.js"]` で固定されているが、`dist/scripts/` には `fetch-search-keywords-batch.js` も含まれる(同じ `npm run build` でまとめてコンパイルされるため)。新しいイメージを作らず、同じイメージに対して `gcloud run jobs create` 時に `--command`/`--args` でコマンドを上書きすれば、2つ目のCloud Run Jobとしてデプロイできる:
+
+```text
+gcloud run jobs create fetch-search-keywords-batch \
+  --image=asia-northeast1-docker.pkg.dev/oaky-gmb/gbp-performance/fetch-daily-batch:latest \
+  --region=asia-northeast1 \
+  --command=node \
+  --args=dist/scripts/fetch-search-keywords-batch.js \
+  --set-cloudsql-instances=oaky-gmb:asia-northeast1:gbp-performance-sql-instance \
+  --set-env-vars="CLOUD_SQL_CONNECTION_NAME=oaky-gmb:asia-northeast1:gbp-performance-sql-instance" \
+  --set-secrets="DATABASE_URL=gbp-performance-database-url:latest,\
+GOOGLE_OAUTH_CLIENT_ID=gbp-performance-oauth-client-id:latest,\
+GOOGLE_OAUTH_CLIENT_SECRET=gbp-performance-oauth-client-secret:latest,\
+GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest"
+```
+
+あとは4〜5章と同様に、別のCloud Schedulerジョブ(`fetch-search-keywords-batch-trigger` 等)を作成してキックする。月次データのため、スケジュール頻度は毎日である必要はない(週1回程度でも、内部で未取得月をキャッチアップする)。
+
 ## 未確定・将来の課題
 
 - 上記の Cloud Scheduler / Cloud Run Job 設定は実際に作成済み(`fetch-daily-batch` Job、`fetch-daily-batch-trigger` Scheduler)。手動実行での動作確認は完了しているが、Scheduler経由の自動実行(毎日18:00 JST)はまだ実績がないため、初回実行後にログを確認すること。
 - `fetch-daily-batch` は「単一Googleアカウントのみを前提とする」設計です(`google_oauth_credentials` に2件以上登録されているとエラーで停止する)。将来、代理店ごとに別のGoogleアカウントを使う運用に変わった場合は設計の見直しが必要です。
+- `fetch-search-keywords-batch`(検索キーワードランキング月次取得)はコード上は実装済みだが、Cloud Scheduler / Cloud Run Job としてはまだデプロイされていない(上記「検索キーワードランキング月次バッチを同様にデプロイする場合」参照)。ローカルでの手動実行(`npm run fetch:search-keywords-batch`)のみ動作確認済み。

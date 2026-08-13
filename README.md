@@ -50,6 +50,22 @@ npm run fetch:daily-batch
 
 このバッチをCloud Scheduler + Cloud Run Job で定期実行する手順は [`docs/infra.md`](docs/infra.md) の「定期実行」章を参照してください。
 
+## 検索キーワードランキングの取得(月次)
+
+Google Business Profile Performance API の `searchkeywords.impressions.monthly` から、そのビジネスプロフィールが表示された検索キーワードを月次で取得し、`search_keyword_metrics` テーブルへ保存する。
+
+```bash
+# 1ロケーション・1か月分の動作確認
+npm run fetch:search-keywords -- --location=<googleLocationId> --month=YYYY-MM --account=<accountLabel>
+
+# 全ロケーションを巡回し、未取得月をキャッチアップ取得
+npm run fetch:search-keywords-batch
+```
+
+日次バッチと同様、「実行日の5日前の時点で既に完全に終わっている直近の月」までの未取得月をキャッチアップする(Googleのデータ反映が安定するまで待つため)。値がAPI側の閾値未満(実数非公開)の場合は `value` ではなく `belowThreshold`(閾値)に保存される。
+
+このバッチはまだCloud Scheduler / Cloud Run Job としてはデプロイされていない(コード上の実装のみ)。デプロイ手順は [`docs/infra.md`](docs/infra.md) の「定期実行」章を参照。
+
 ## ディレクトリ構成
 
 ```
@@ -59,7 +75,8 @@ src/
   db/        Prisma Client・リポジトリ層
 prisma/      Prismaスキーマ(docs/schema.sqlと手動同期)
 docs/        DBスキーマ(手動実行用DDL)・インフラ構築手順
-scripts/     手動実行するCLI(OAuthトークン取得・1日分データ取得・全ロケーション巡回バッチ)
+scripts/     手動実行するCLI(OAuthトークン取得・1日分データ取得・全ロケーション巡回バッチ・
+             検索キーワードランキング取得(単発/月次バッチ))
 test/        Vitestによる単体テスト
 Dockerfile   fetch-daily-batch をCloud Run Jobとして動かすためのイメージ定義
 ```

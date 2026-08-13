@@ -42,8 +42,9 @@ model Location {
   createdAt        DateTime @default(now()) @db.DateTime(3)
   updatedAt        DateTime @updatedAt @db.DateTime(3)
 
-  agency       Agency        @relation(fields: [agencyId], references: [id])
-  dailyMetrics DailyMetric[]
+  agency               Agency                @relation(fields: [agencyId], references: [id])
+  dailyMetrics         DailyMetric[]
+  searchKeywordMetrics SearchKeywordMetric[]
 
   @@unique([agencyId, googleLocationId], name: "locations_agencyId_googleLocationId_key")
   @@map("locations")
@@ -75,6 +76,26 @@ model DailyMetric {
   @@unique([locationId, metricDate, metricType], name: "daily_metrics_locationId_metricDate_metricType_key")
   @@index([metricDate], name: "daily_metrics_metricDate_idx")
   @@map("daily_metrics")
+}
+
+// Google Business Profile Performance API の searchkeywords.impressions.monthly が返す、
+// 「そのビジネスがどんな検索語句で表示されたか」の月次集計。
+// value / belowThreshold は排他(どちらか一方のみ非null。詳細は docs/schema.sql 参照)。
+model SearchKeywordMetric {
+  id             BigInt   @id @default(autoincrement())
+  locationId     Int
+  metricMonth    DateTime @db.Date
+  searchKeyword  String   @db.VarChar(255)
+  value          Int?
+  belowThreshold Int?
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+  updatedAt      DateTime @updatedAt @db.DateTime(3)
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, metricMonth, searchKeyword], name: "search_keyword_metrics_locationId_metricMonth_searchKeyword_key")
+  @@index([metricMonth], name: "search_keyword_metrics_metricMonth_idx")
+  @@map("search_keyword_metrics")
 }
 
 // Google OAuth のリフレッシュトークン等の認証情報。
