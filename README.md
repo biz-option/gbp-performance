@@ -64,7 +64,7 @@ npm run fetch:search-keywords-batch
 
 日次バッチと同様、「実行日の5日前の時点で既に完全に終わっている直近の月」までの未取得月をキャッチアップする(Googleのデータ反映が安定するまで待つため)。値がAPI側の閾値未満(実数非公開)の場合は `value` ではなく `belowThreshold`(閾値)に保存される。
 
-このバッチはまだCloud Scheduler / Cloud Run Job としてはデプロイされていない(コード上の実装のみ)。デプロイ手順は [`docs/infra.md`](docs/infra.md) の「定期実行」章を参照。
+このバッチはCloud Scheduler + Cloud Run Job(`fetch-search-keywords-batch`、`fetch-search-keywords-batch-trigger`)で毎月6日に定期実行される。デプロイ手順・スケジュールの理由は [`docs/infra.md`](docs/infra.md) の「定期実行」章を参照。
 
 ## ディレクトリ構成
 
