@@ -50,6 +50,8 @@ npm run fetch:daily-batch
 
 このバッチをCloud Scheduler + Cloud Run Job で定期実行する手順は [`docs/infra.md`](docs/infra.md) の「定期実行」章を参照してください。
 
+保存したデータをGoogleデータポータル(Looker Studio)で資料化する際のカスタムクエリは [`docs/data-portal-queries.sql`](docs/data-portal-queries.sql) を参照してください。
+
 ## 検索キーワードランキングの取得(月次)
 
 Google Business Profile Performance API の `searchkeywords.impressions.monthly` から、そのビジネスプロフィールが表示された検索キーワードを月次で取得し、`search_keyword_metrics` テーブルへ保存する。
