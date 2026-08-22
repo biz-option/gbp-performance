@@ -7,6 +7,12 @@ import { getLastSearchKeywordMonth } from "../db/searchKeywordMetricsRepository.
  * 「月が完全に終わってから何日待って安定したとみなすか」の遅延日数。
  * fetch-daily-batch の FETCH_DELAY_DAYS と同じ考え方(Googleのデータ反映が
  * 安定するまで待つ)を月次に適用したもの。
+ *
+ * この値により、月が変わってから丸 SEARCH_KEYWORDS_FETCH_DELAY_DAYS 日経過するまで、
+ * 直前月は取得対象に入らない(computeUpperBoundMonth 参照)。そのため
+ * Cloud Scheduler 等でこのバッチを月1回だけ実行する場合、月初1日や月末に実行しても
+ * 直前月のデータはまだ取得できず(2か月遅れになる)、毎月6日以降に実行して初めて
+ * 直前月のデータが取得対象に入る(docs/infra.md の「検索キーワードランキング月次バッチ」章参照)。
  */
 export const SEARCH_KEYWORDS_FETCH_DELAY_DAYS = 5;
 

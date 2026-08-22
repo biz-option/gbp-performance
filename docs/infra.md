@@ -159,10 +159,22 @@ GOOGLE_OAUTH_CLIENT_SECRET=gbp-performance-oauth-client-secret:latest,\
 GOOGLE_OAUTH_REDIRECT_URI=gbp-performance-oauth-redirect-uri:latest"
 ```
 
-あとは4〜5章と同様に、別のCloud Schedulerジョブ(`fetch-search-keywords-batch-trigger` 等)を作成してキックする。月次データのため、スケジュール頻度は毎日である必要はない(週1回程度でも、内部で未取得月をキャッチアップする)。
+あとは4章と同様に、Cloud Scheduler からJobを起動するためのサービスアカウントに `roles/run.invoker` を付与した上で、別のCloud Schedulerジョブ(`fetch-search-keywords-batch-trigger` 等)を作成してキックする。
+
+```text
+gcloud scheduler jobs create http fetch-search-keywords-batch-trigger \
+  --location=<region> \
+  --schedule="0 18 6 * *" \
+  --time-zone="Asia/Tokyo" \
+  --uri="https://run.googleapis.com/v2/projects/oaky-gmb/locations/<region>/jobs/fetch-search-keywords-batch:run" \
+  --http-method=POST \
+  --oauth-service-account-email=<scheduler用サービスアカウント>
+```
+
+**スケジュールは「毎月6日」を推奨**(`--schedule="0 18 6 * *"`)。理由は取得対象月の決定ロジック(`SEARCH_KEYWORDS_FETCH_DELAY_DAYS = 5`、`src/google/fetchSearchKeywordsBatch.ts`)にある: 実行日の5日前が属する月の前月までしか取得しないため、月初1日や月末に実行しても直前月のデータはまだ2か月遅れでしか取れない。月が変わってから5日経過して初めて直前月が取得対象に入るため、最短で6日に実行するのが最も新鮮なデータを取得できるタイミングになる。月次データのため、それより頻度を上げる必要はない(内部で未取得月をキャッチアップするため、多少ズレても取りこぼしはない)。
 
 ## 未確定・将来の課題
 
 - 上記の Cloud Scheduler / Cloud Run Job 設定は実際に作成済み(`fetch-daily-batch` Job、`fetch-daily-batch-trigger` Scheduler)。手動実行での動作確認は完了しているが、Scheduler経由の自動実行(毎日18:00 JST)はまだ実績がないため、初回実行後にログを確認すること。
 - `fetch-daily-batch` は「単一Googleアカウントのみを前提とする」設計です(`google_oauth_credentials` に2件以上登録されているとエラーで停止する)。将来、代理店ごとに別のGoogleアカウントを使う運用に変わった場合は設計の見直しが必要です。
-- `fetch-search-keywords-batch`(検索キーワードランキング月次取得)はコード上は実装済みだが、Cloud Scheduler / Cloud Run Job としてはまだデプロイされていない(上記「検索キーワードランキング月次バッチを同様にデプロイする場合」参照)。ローカルでの手動実行(`npm run fetch:search-keywords-batch`)のみ動作確認済み。
+- `fetch-search-keywords-batch`(検索キーワードランキング月次取得)は、上記「検索キーワードランキング月次バッチを同様にデプロイする場合」の手順で Cloud Run Job・Cloud Scheduler(`fetch-search-keywords-batch-trigger`、毎月6日18:00 JST)を作成済み。Scheduler経由の自動実行はまだ実績がないため、初回実行後にログを確認すること。
